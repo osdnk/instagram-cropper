@@ -17,6 +17,7 @@ const {
   and,
   Value,
   spring,
+  lessOrEq,
   or,
   divide,
   greaterThan,
@@ -45,6 +46,7 @@ const {
 }*/
 type PickerProps = {
   source: ImageURISource,
+  ratio: number,
 };
 
 type PickerState = {
@@ -66,9 +68,14 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   private readonly panState: Animated.Value<number>;
   private readonly pinchState: Animated.Value<number>;
   private readonly handlePan: any;
+  private readonly handleOnLayout: any;
   private readonly handlePinch: any;
   private readonly photoWidth: any;
+  private readonly componentWidth: any;
+  private readonly componentHeight: any;
   private readonly photoHeight: any;
+  private readonly distanceFromLeft: any;
+  private readonly distanceFromTop: any;
   constructor(props: PickerProps) {
     super(props);
     this.dragX = new Value(0);
@@ -76,8 +83,12 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     this.panState = new Value(0);
     this.pinchState = new Value(0);
     this.scaleMovement = new Value(1);
-    this.photoHeight = new Value(0);
-    this.photoWidth = new Value(0);
+    this.photoHeight = new Value(1);
+    this.photoWidth = new Value(1);
+    this.distanceFromLeft = new Value(0);
+    this.distanceFromTop = new Value(0);
+    this.componentWidth = new Value(0);
+    this.componentHeight = new Value(0);
     this.handlePan = event([
       {
         nativeEvent: {
@@ -87,6 +98,32 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         },
       },
     ]);
+
+    this.handleOnLayout =
+      (
+        {
+          nativeEvent: {
+            layout: {
+              width,
+              height,
+            },
+          },
+        } : {
+          nativeEvent: {
+            layout: {
+              width : number,
+              height : number,
+            },
+          },
+        },
+    ) => {
+        this.photoHeight.setValue(Math.min(height, width / this.props.ratio));
+        this.photoWidth.setValue(Math.min(width, height * this.props.ratio));
+        this.distanceFromLeft.setValue((width - Math.min(width, height * this.props.ratio)) / 2);
+        this.distanceFromTop.setValue((height - Math.min(height, width / this.props.ratio)) / 2);
+        this.componentHeight.setValue(height);
+        this.componentWidth.setValue(width);
+      };
 
     this.handlePinch = event([
       {
@@ -99,27 +136,49 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     this.scale = InstagramPicker.withLimits(
       InstagramPicker.withPreservingMultiplicativeOffset(
       this.scaleMovement, this.pinchState),
-      1,
+      0.9,
       3,
       this.pinchState,
     )
-    this.transX = InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState);
-    this.transY = InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState);
-    Image.getSize(
-      this.props.source,
-      (width : number, height : number) => {
-        this.photoWidth.setValue(width);
-        this.photoHeight.setValue(height);
-      },
-      () => {},
-      );
+    const isUnderSizedX = lessOrEq(this.scale, divide(this.componentWidth, this.photoWidth));
+    const isUnderSizedY = lessOrEq(this.scale, divide(this.componentHeight, this.photoHeight));
 
-  }
+    const lowX = cond(
+      isUnderSizedX,
+      0,
+      sub(divide(this.componentWidth, this.scale, 2), divide(this.photoWidth, 2)),
+    );
 
-  onPhotoLayout = ({ nativeEvent: { layout: { width, height } } }: { nativeEvent: { layout: { width: number, height: number } } }) => {
-    console.warn(width, height)
-    this.photoWidth.setValue(width);
-    this.photoHeight.setValue(height);
+    const lowY = cond(
+      isUnderSizedY,
+      0,
+      sub(divide(this.componentHeight, this.scale, 2), divide(this.photoHeight, 2)),
+    );
+
+    const upX = cond(
+      isUnderSizedX,
+      lowX,
+      divide(sub(this.photoWidth, divide(this.componentWidth, this.scale)), 2),
+    );
+
+    const upY = cond(
+      isUnderSizedY,
+      0,
+      divide(sub(this.photoHeight, divide(this.componentHeight, this.scale)), 2),
+    );
+
+    this.transX = InstagramPicker.withLimits(
+      InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
+      lowX,
+      upX,
+      this.panState,
+    );
+    this.transY = InstagramPicker.withLimits(
+      InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
+      lowY,
+      upY,
+      this.panState,
+    );
   }
 
   /*static getDerivedStateFromProps(props: PickerProps, state: PickerState | null) : PickerState {
@@ -203,23 +262,14 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   pan : RefObject<PanGestureHandler> = React.createRef();
   render() {
     return (
-      <View style={{ width: 350, height: 350, overflow: 'hidden', borderWidth: 1, backgroundColor: '#BBB' }}>
+      <View style={{ width: 350, height: 350, overflow: 'hidden', backgroundColor: '#BBB' }}>
         <PinchGestureHandler
           ref={this.pinch}
           simultaneousHandlers={this.pan}
           onGestureEvent={this.handlePinch}
           onHandlerStateChange={this.handlePinch}
         >
-        <Animated.View
-          onLayout={this.onPhotoLayout}
-          style={{
-            transform: [
-              { scale: this.scale },
-              { translateX: this.transX },
-              { translateY: this.transY },
-            ],
-          }}
-        >
+        <Animated.View>
         <PanGestureHandler
           ref={this.pan}
           simultaneousHandlers={this.pinch}
@@ -227,10 +277,17 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           onHandlerStateChange={this.handlePan}
         >
           <Animated.Image
-
+            onLayout={this.handleOnLayout}
             style={{
               width: '100%',
               height: '100%',
+              transform: [
+                { scale: this.scale },
+                { translateX: this.transX },
+                { translateY: block([
+                    // call([this.distanceFromTop, this.distanceFromLeft, this.photoHeight, this.photoWidth], console.warn),
+                    this.transY]) },
+              ],
             }}
             resizeMode='contain'
             source={this.props.source}
@@ -243,12 +300,28 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   }
 }
 
-export default class App extends React.Component {
+type AppState = {
+  ratio: number,
+  photo: ImageURISource,
+};
+
+export default class App extends React.Component<{}, AppState> {
+  constructor(props : {}) {
+    super(props);
+    const photo = require('./assets/kuce.jpg');
+    const { width, height } = Image.resolveAssetSource(photo);
+    this.state = {
+      ratio: width / height,
+      photo: require('./assets/kuce.jpg'),
+    };
+  }
   render() {
+    console.warn(this.state.ratio)
     return (
       <View style={styles.container}>
         <InstagramPicker
-          source={require('./assets/kuce.jpg')}
+          ratio={this.state.ratio}
+          source={this.state.photo}
         />
       </View>
     );
