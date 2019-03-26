@@ -93,9 +93,13 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     this.distanceFromTop = new Value(0);
     this.componentWidth = new Value(0);
     this.componentHeight = new Value(0);
+    const velocityX = new Animated.Value(0);
+    const velocityY = new Animated.Value(0);
     this.handlePan = event([
       {
         nativeEvent: {
+          velocityY,
+          velocityX,
           translationX: this.dragX,
           translationY: this.dragY,
           state: this.panState,
@@ -173,13 +177,20 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       divide(sub(this.photoHeight, divide(this.componentHeight, this.scale)), 2),
     );
 
+    const wasDecayRun = new Animated.Value(0);
+
     this.transX =
       InstagramPicker.withLimits(
-        InstagramPicker.withAddingFocalDisplacement(
-          InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
-          sub(0.5,  divide(this.focalX, this.photoWidth)),
-          this.scale,
-          this.photoWidth,
+        InstagramPicker.withDecaying(
+          InstagramPicker.withAddingFocalDisplacement(
+            InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
+            sub(0.5,  divide(this.focalX, this.photoWidth)),
+            this.scale,
+            this.photoWidth,
+          ),
+          this.panState,
+          velocityX,
+          wasDecayRun,
         ),
         lowX,
         upX,
@@ -187,16 +198,21 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       );
     this.transY =
       InstagramPicker.withLimits(
-        InstagramPicker.withAddingFocalDisplacement(
-          InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
-          sub(0.5,  divide(this.focalX, this.photoHeight)),
-          this.scale,
-          this.photoHeight,
+        InstagramPicker.withDecaying(
+          InstagramPicker.withAddingFocalDisplacement(
+            InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
+            sub(0.5,  divide(this.focalX, this.photoHeight)),
+            this.scale,
+            this.photoHeight,
+          ),
+          this.panState,
+          velocityY,
+          wasDecayRun,
         ),
         lowY,
         upY,
         this.panState,
-        );
+      );
   }
 
   /*static getDerivedStateFromProps(props: PickerProps, state: PickerState | null) : PickerState {
@@ -207,6 +223,78 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     const transY = InstagramPicker.withPreservingAdditiveOffset(dragY, panState);
     return state;
   }*/
+
+  private static runDecay(
+    clock : Animated.Clock,
+    value : Animated.Adaptable<number>,
+    velocity: Animated.Value<number>,
+    wasStartedFromBegin : Animated.Value<number>,
+  ) : Animated.Adaptable<number> {
+    const state = {
+      finished: new Value(0),
+      velocity: new Value(0),
+      position: new Value(0),
+      time: new Value(0),
+    }
+
+    const wasJustStarted = new Value(0);
+
+    const config = { deceleration: 0.98 }
+
+    return [
+      set(wasJustStarted, 0),
+      cond(or(clockRunning(clock), wasStartedFromBegin), 0, [
+        set(state.finished, 0),
+        set(state.velocity, velocity),
+        set(state.position, value),
+        set(state.time, 0),
+        startClock(clock),
+        set(wasJustStarted, 1),
+      ]),
+      cond(clockRunning(clock), decay(clock, state, config)),
+      cond(state.finished, [
+        cond(and(clockRunning(clock), not(wasJustStarted)), set(wasStartedFromBegin, 1)),
+        stopClock(clock),
+      ]),
+      state.position,
+    ];
+  }
+
+  private static withDecaying(
+    drag: Animated.Adaptable<number>,
+    state: Animated.Adaptable<number>,
+    velocity: Animated.Value<number>,
+    wasStartedFromBegin: Animated.Value<number>,
+  ) : Animated.Adaptable<number> {
+    const valDecayed = new Value(0);
+    const offset = new Value(0);
+    const prevState = new Value(0)
+    const decayClock = new Clock();
+    return block([
+      cond(
+        eq(state, State.END),
+        set(
+          valDecayed,
+          InstagramPicker.runDecay(
+            decayClock,
+            add(drag, offset),
+            velocity,
+            wasStartedFromBegin,
+          ),
+        ),
+        [
+          stopClock(decayClock),
+          cond(or(eq(state, State.BEGAN), and(eq(prevState, State.END), eq(state, State.ACTIVE))), [
+            set(wasStartedFromBegin, 0),
+            set(offset, sub(valDecayed, drag)),
+          ]),
+          set(prevState, state),
+          set(valDecayed, add(drag, offset)),
+        ],
+      ),
+      valDecayed,
+    ]);
+  }
 
   private static withPreservingAdditiveOffset
   (drag: Animated.Value<number>, state: Animated.Value<number>)
