@@ -345,17 +345,14 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   private static withPreservingMultiplicativeOffset
   (val: Animated.Value<number>, state: Animated.Value<number>)
     : Animated.Adaptable<number> {
-    const prev = new Animated.Value(1)
+    const offset = new Animated.Value(1)
     const valWithPreservedOffset = new Animated.Value(1)
     return block([
       cond(
         eq(state, State.BEGAN),
-        set(prev, 1),
-        [
-          set(valWithPreservedOffset, multiply(valWithPreservedOffset, divide(val, prev))),
-          set(prev, val),
-        ],
+        set(offset, valWithPreservedOffset),
       ),
+      set(valWithPreservedOffset, multiply(offset, val)),
       valWithPreservedOffset,
     ]);
   }
