@@ -61,6 +61,8 @@ type PickerState = {
 class InstagramPicker extends React.Component<PickerProps, PickerState> {
   private readonly transX: Animated.Adaptable<number>;
   private readonly transY: Animated.Adaptable<number>;
+  private readonly focalX: Animated.Value<number>;
+  private readonly focalY: Animated.Value<number>;
   private readonly scale: Animated.Adaptable<number>;
   private readonly scaleMovement: Animated.Value<number>;
   private readonly dragX: Animated.Value<number>;
@@ -80,6 +82,8 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     super(props);
     this.dragX = new Value(0);
     this.dragY = new Value(0);
+    this.focalX = new Value(0);
+    this.focalY = new Value(0);
     this.panState = new Value(0);
     this.pinchState = new Value(0);
     this.scaleMovement = new Value(1);
@@ -130,6 +134,8 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         nativeEvent: {
           scale: this.scaleMovement,
           state: this.pinchState,
+          focalX: this.focalX,
+          focalY: this.focalY,
         },
       },
     ]);
@@ -167,18 +173,30 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       divide(sub(this.photoHeight, divide(this.componentHeight, this.scale)), 2),
     );
 
-    this.transX = InstagramPicker.withLimits(
-      InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
-      lowX,
-      upX,
-      this.panState,
-    );
-    this.transY = InstagramPicker.withLimits(
-      InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
-      lowY,
-      upY,
-      this.panState,
-    );
+    this.transX =
+      InstagramPicker.withLimits(
+        InstagramPicker.withAddingFocalDisplacement(
+          InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
+          sub(0.5,  divide(this.focalX, this.photoWidth)),
+          this.scale,
+          this.photoWidth,
+        ),
+        lowX,
+        upX,
+        this.panState,
+      );
+    this.transY =
+      InstagramPicker.withLimits(
+        InstagramPicker.withAddingFocalDisplacement(
+          InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
+          sub(0.5,  divide(this.focalX, this.photoHeight)),
+          this.scale,
+          this.photoHeight,
+        ),
+        lowY,
+        upY,
+        this.panState,
+        );
   }
 
   /*static getDerivedStateFromProps(props: PickerProps, state: PickerState | null) : PickerState {
@@ -206,6 +224,29 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           ],
         ),
         valWithPreservedOffset,
+      ],
+    );
+  }
+
+  private static withAddingFocalDisplacement
+  (init: Animated.Adaptable<number>,
+   diff: Animated.Adaptable<number>,
+   scale: Animated.Adaptable<number>,
+   size: Animated.Value<number>)
+    : Animated.Adaptable<number> {
+    const prevScale = new Value(1);
+    const valWithFocalDisplacement = new Value(0);
+    return block(
+      [
+        set(
+          valWithFocalDisplacement,
+          add(
+            valWithFocalDisplacement,
+            divide(multiply(diff, sub(scale, prevScale), size), scale, scale),
+          ),
+        ),
+        set(prevScale, scale),
+        add(init, valWithFocalDisplacement),
       ],
     );
   }
