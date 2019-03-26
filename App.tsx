@@ -191,6 +191,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           this.panState,
           velocityX,
           wasDecayRun,
+          this.scale,
         ),
         lowX,
         upX,
@@ -208,6 +209,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           this.panState,
           velocityY,
           wasDecayRun,
+          this.scale,
         ),
         lowY,
         upY,
@@ -227,7 +229,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   private static runDecay(
     clock : Animated.Clock,
     value : Animated.Adaptable<number>,
-    velocity: Animated.Value<number>,
+    velocity: Animated.Adaptable<number>,
     wasStartedFromBegin : Animated.Value<number>,
   ) : Animated.Adaptable<number> {
     const state = {
@@ -265,6 +267,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     state: Animated.Adaptable<number>,
     velocity: Animated.Value<number>,
     wasStartedFromBegin: Animated.Value<number>,
+    scale: Animated.Adaptable<number>,
   ) : Animated.Adaptable<number> {
     const valDecayed = new Value(0);
     const offset = new Value(0);
@@ -278,7 +281,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           InstagramPicker.runDecay(
             decayClock,
             add(drag, offset),
-            velocity,
+            divide(velocity, scale),
             wasStartedFromBegin,
           ),
         ),
