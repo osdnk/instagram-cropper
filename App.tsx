@@ -1,5 +1,5 @@
 import React, {RefObject} from 'react';
-import { StyleSheet, Text, View, Image, ImageURISource } from 'react-native';
+import {StyleSheet, Text, View, Image, ImageURISource, Platform} from 'react-native';
 import { PanGestureHandler, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 
@@ -183,7 +183,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       InstagramPicker.withLimits(
         InstagramPicker.withDecaying(
           InstagramPicker.withAddingFocalDisplacement(
-            InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState),
+            InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState, this.scale),
             sub(0.5,  divide(this.focalX, this.photoWidth)),
             this.scale,
             this.photoWidth,
@@ -201,7 +201,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       InstagramPicker.withLimits(
         InstagramPicker.withDecaying(
           InstagramPicker.withAddingFocalDisplacement(
-            InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState),
+            InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState, this.scale),
             sub(0.5,  divide(this.focalX, this.photoHeight)),
             this.scale,
             this.photoHeight,
@@ -300,7 +300,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   }
 
   private static withPreservingAdditiveOffset
-  (drag: Animated.Value<number>, state: Animated.Value<number>)
+  (drag: Animated.Value<number>, state: Animated.Value<number>, scale: Animated.Adaptable<number>)
     : Animated.Adaptable<number> {
     const prev = new Value(0);
     const valWithPreservedOffset = new Value(0);
@@ -310,7 +310,15 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
           eq(state, State.BEGAN),
           set(prev, 0),
           [
-            set(valWithPreservedOffset, add(valWithPreservedOffset, sub(drag, prev))),
+            set(
+              valWithPreservedOffset,
+              add(
+                valWithPreservedOffset,
+                Platform.select({
+                  ios: sub(drag, prev),
+                  android: divide(sub(drag, prev), scale),
+                }),
+            )),
             set(prev, drag),
           ],
         ),
