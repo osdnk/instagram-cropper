@@ -12,6 +12,7 @@ const {
   not,
   defined,
   max,
+  sqrt,
   add,
   call,
   and,
@@ -33,6 +34,7 @@ const {
   lessThan,
 } = Animated;
 
+
 /*interface ImageURISource {
   uri?: string;
   bundle?: string;
@@ -44,6 +46,8 @@ const {
   height?: number;
   scale?: number;
 }*/
+
+
 type PickerProps = {
   source: ImageURISource,
   ratio: number,
@@ -146,7 +150,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     this.scale = InstagramPicker.withLimits(
       InstagramPicker.withPreservingMultiplicativeOffset(
       this.scaleMovement, this.pinchState),
-      0.9,
+      1,
       3,
       this.pinchState,
     );
@@ -180,7 +184,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     const wasDecayRun = new Animated.Value(0);
 
     this.transX =
-      InstagramPicker.withLimits(
+      InstagramPicker.withBouncyLimits(
         InstagramPicker.withDecaying(
           InstagramPicker.withAddingFocalDisplacement(
             InstagramPicker.withPreservingAdditiveOffset(this.dragX, this.panState, this.scale),
@@ -198,7 +202,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         this.panState,
       );
     this.transY =
-      InstagramPicker.withLimits(
+      InstagramPicker.withBouncyLimits(
         InstagramPicker.withDecaying(
           InstagramPicker.withAddingFocalDisplacement(
             InstagramPicker.withPreservingAdditiveOffset(this.dragY, this.panState, this.scale),
@@ -225,6 +229,139 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     const transY = InstagramPicker.withPreservingAdditiveOffset(dragY, panState);
     return state;
   }*/
+
+  private static withBouncyLimits(
+    val : Animated.Adaptable<number>,
+    min : Animated.Adaptable<number>,
+    max : Animated.Adaptable<number>,
+    state : Animated.Adaptable<number>,
+  ) {
+    const prev = new Animated.Value(0);
+    const limitedVal = new Animated.Value(0);
+    const flagWasRunSpring = new Animated.Value(0);
+    const springClock = new Clock();
+    return block([
+      cond(
+        eq(state, State.BEGAN),
+        [
+          set(prev, val),
+          set(flagWasRunSpring, 0),
+          stopClock(springClock),
+        ],
+        [
+          cond(
+            eq(state, State.END),
+            [
+              cond(
+                lessThan(limitedVal, min),
+                set(
+                  limitedVal,
+                  InstagramPicker.runSpring(
+                    springClock,
+                    limitedVal,
+                    min, flagWasRunSpring),
+                ),
+              ),
+              cond(
+                greaterThan(limitedVal, max),
+                set(
+                  limitedVal,
+                  InstagramPicker.runSpring(
+                    springClock,
+                    limitedVal,
+                    max,
+                    flagWasRunSpring,
+                  )),
+              ),
+            ],
+            [
+              set(limitedVal, add(limitedVal, sub(val, prev))),
+              cond(
+                and(lessThan(limitedVal, min), lessThan(val, prev)),
+                // derivate of sqrt
+                [
+                  // revert
+                  set(limitedVal, add(limitedVal, sub(prev, val))),
+                  // and use derivative of sqrt(x)
+                  set(
+                    limitedVal,
+                    sub(
+                      limitedVal,
+                      multiply(
+                        (divide(1, multiply(2, sqrt(sub(min, sub(limitedVal, sub(prev, val))))))),
+                        (sub(prev, val)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              cond(
+                and(greaterThan(limitedVal, max), greaterThan(val, prev)),
+                // derivate of sqrt
+                [
+                  // revert
+                  set(limitedVal, add(limitedVal, sub(prev, val))),
+                  // and use derivative of sqrt(x)
+                  set(
+                    limitedVal,
+                    add(
+                      limitedVal,
+                      multiply(
+                        (divide(1, multiply(2, sqrt(sub(add(limitedVal, sub(val, prev)), max))))),
+                        (sub(val, prev)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              set(prev, val),
+            ],
+          ),
+        ]),
+      limitedVal,
+    ]);
+  }
+  private static runSpring(
+    clock : Animated.Clock,
+    value : Animated.Adaptable<number>,
+    dest: Animated.Adaptable<number>,
+    wasStartedFromBegin : Animated.Value<number>,
+    ) {
+    const state = {
+      finished: new Value(0),
+      velocity: new Value(0),
+      position: new Value(0),
+      time: new Value(0),
+    }
+
+    const wasJustStarted = new Value(0);
+
+    const config = {
+      damping: 40,
+      mass: 1,
+      stiffness: 121.6,
+      overshootClamping: true,
+      restSpeedThreshold: 0.001,
+      restDisplacementThreshold: 0.001,
+      toValue: new Value(0),
+    }
+    return [
+      set(wasJustStarted, 0),
+      cond(or(clockRunning(clock), wasStartedFromBegin), 0, [
+        set(state.finished, 0),
+        set(state.position, value),
+        set(config.toValue, dest),
+        startClock(clock),
+        set(wasJustStarted, 1),
+      ]),
+      cond(clockRunning(clock), spring(clock, state, config)),
+      cond(state.finished, [
+        cond(and(clockRunning(clock), not(wasJustStarted)), set(wasStartedFromBegin, 1)),
+        stopClock(clock),
+      ]),
+      state.position,
+    ]
+  }
 
   private static runDecay(
     clock : Animated.Clock,
@@ -456,6 +593,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
                 source={this.props.source}
               />
             </PanGestureHandler>
+
           </Animated.View>
         </PinchGestureHandler>
       </View>
