@@ -1,5 +1,5 @@
-import React, {RefObject} from 'react';
-import {StyleSheet, Text, View, Image, ImageURISource, Platform} from 'react-native';
+import React, { RefObject } from 'react';
+import { StyleSheet, Text, View, Image, ImageURISource, Platform } from 'react-native';
 import { PanGestureHandler, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 
@@ -149,7 +149,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       0.9,
       3,
       this.pinchState,
-    )
+    );
     const isUnderSizedX = lessOrEq(this.scale, divide(this.componentWidth, this.photoWidth));
     const isUnderSizedY = lessOrEq(this.scale, divide(this.componentHeight, this.photoHeight));
 
@@ -237,11 +237,11 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       velocity: new Value(0),
       position: new Value(0),
       time: new Value(0),
-    }
+    };
 
     const wasJustStarted = new Value(0);
 
-    const config = { deceleration: 0.98 }
+    const config = { deceleration: 0.98 };
 
     return [
       set(wasJustStarted, 0),
@@ -271,7 +271,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   ) : Animated.Adaptable<number> {
     const valDecayed = new Value(0);
     const offset = new Value(0);
-    const prevState = new Value(0)
+    const prevState = new Value(0);
     const decayClock = new Clock();
     return block([
       cond(
@@ -353,14 +353,39 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   private static withPreservingMultiplicativeOffset
   (val: Animated.Value<number>, state: Animated.Value<number>)
     : Animated.Adaptable<number> {
-    const offset = new Animated.Value(1)
-    const valWithPreservedOffset = new Animated.Value(1)
+    if (Platform.OS === 'android') {
+      return this.withPreservingMultiplicativeOffsetAndroid(val, state);
+    }
+    const offset = new Animated.Value(1);
+    const valWithPreservedOffset = new Animated.Value(1);
     return block([
       cond(
         eq(state, State.BEGAN),
         set(offset, valWithPreservedOffset),
       ),
       set(valWithPreservedOffset, multiply(offset, val)),
+      valWithPreservedOffset,
+    ]);
+  }
+
+  private static withPreservingMultiplicativeOffsetAndroid
+  (val: Animated.Value<number>, state: Animated.Value<number>)
+    : Animated.Adaptable<number> {
+    const offset = new Animated.Value(1);
+    const init = new Animated.Value(0);
+    const valWithPreservedOffset = new Animated.Value(1);
+    return block([
+      cond(
+        eq(state, State.BEGAN),
+        [
+          set(offset, valWithPreservedOffset),
+          set(init, 0),
+        ],
+        [
+          cond(eq(init, 0), set(init, val)),
+          set(valWithPreservedOffset, multiply(offset, divide(val, init))),
+        ],
+      ),
       valWithPreservedOffset,
     ]);
   }
@@ -401,36 +426,37 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     return (
       <View style={{ width: 350, height: 350, overflow: 'hidden', backgroundColor: '#BBB' }}>
         <PinchGestureHandler
+          shouldCancelWhenOutside={false}
           ref={this.pinch}
           simultaneousHandlers={this.pan}
           onGestureEvent={this.handlePinch}
           onHandlerStateChange={this.handlePinch}
         >
-        <Animated.View>
-        <PanGestureHandler
-          ref={this.pan}
-          simultaneousHandlers={this.pinch}
-          onGestureEvent={this.handlePan}
-          onHandlerStateChange={this.handlePan}
-        >
-          <Animated.Image
-            onLayout={this.handleOnLayout}
-            style={{
-              width: '100%',
-              height: '100%',
-              transform: [
-                { scale: this.scale },
-                { translateX: this.transX },
-                { translateY: block([
-                    // call([this.distanceFromTop, this.distanceFromLeft, this.photoHeight, this.photoWidth], console.warn),
-                    this.transY]) },
-              ],
-            }}
-            resizeMode='contain'
-            source={this.props.source}
-          />
-        </PanGestureHandler>
-        </Animated.View>
+          <Animated.View>
+            <PanGestureHandler
+              ref={this.pan}
+              simultaneousHandlers={this.pinch}
+              onGestureEvent={this.handlePan}
+              onHandlerStateChange={this.handlePan}
+            >
+              <Animated.Image
+                onLayout={this.handleOnLayout}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  transform: [
+                    { scale: this.scale },
+                    { translateX: this.transX },
+                    { translateY: block([
+                        // call([this.distanceFromTop, this.distanceFromLeft, this.photoHeight, this.photoWidth], console.warn),
+                      this.transY]) },
+                  ],
+                }}
+                resizeMode='contain'
+                source={this.props.source}
+              />
+            </PanGestureHandler>
+          </Animated.View>
         </PinchGestureHandler>
       </View>
     );
@@ -453,7 +479,7 @@ export default class App extends React.Component<{}, AppState> {
     };
   }
   render() {
-    console.warn(this.state.ratio)
+    console.warn(this.state.ratio);
     return (
       <View style={styles.container}>
         <InstagramPicker
