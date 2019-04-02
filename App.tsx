@@ -634,7 +634,6 @@ export default class App extends React.Component<{}, AppState> {
     });
   }
   render() {
-    console.warn(this.state.ratio);
     return (
       <View style={styles.container}>
         <InstagramPicker
