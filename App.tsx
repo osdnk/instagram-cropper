@@ -13,6 +13,7 @@ const {
   defined,
   max,
   sqrt,
+  min,
   add,
   call,
   and,
@@ -147,9 +148,9 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         },
       },
     ]);
-    this.scale = InstagramPicker.withLimits(
+    this.scale = InstagramPicker.withBouncyLimits(
       InstagramPicker.withPreservingMultiplicativeOffset(
-      this.scaleMovement, this.pinchState),
+      this.scaleMovement, this.pinchState, 1, 3),
       1,
       3,
       this.pinchState,
@@ -200,6 +201,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         lowX,
         upX,
         this.panState,
+        this.pinchState,
       );
     this.transY =
       InstagramPicker.withBouncyLimits(
@@ -218,23 +220,16 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         lowY,
         upY,
         this.panState,
+        this.pinchState,
       );
   }
 
-  /*static getDerivedStateFromProps(props: PickerProps, state: PickerState | null) : PickerState {
-    const dragX = (state && state.dragX) || new Value(0);
-    const dragY = (state && state.dragY) || new Value(0);
-    const panState = (state && state.panState) || new Value(0);
-    const transX = InstagramPicker.withPreservingAdditiveOffset(dragX, panState);
-    const transY = InstagramPicker.withPreservingAdditiveOffset(dragY, panState);
-    return state;
-  }*/
-
   private static withBouncyLimits(
     val : Animated.Adaptable<number>,
-    min : Animated.Adaptable<number>,
-    max : Animated.Adaptable<number>,
+    minBound : Animated.Adaptable<number>,
+    maxBound : Animated.Adaptable<number>,
     state : Animated.Adaptable<number>,
+    anotherState? : Animated.Adaptable<number>,
   ) {
     const prev = new Animated.Value(0);
     const limitedVal = new Animated.Value(0);
@@ -242,7 +237,10 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
     const springClock = new Clock();
     return block([
       cond(
-        eq(state, State.BEGAN),
+        or(
+          eq(state, State.BEGAN),
+          anotherState ?
+            and(eq(state, State.END), eq(anotherState, State.ACTIVE)) : 0),
         [
           set(prev, val),
           set(flagWasRunSpring, 0),
@@ -253,23 +251,25 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
             eq(state, State.END),
             [
               cond(
-                lessThan(limitedVal, min),
+                lessThan(limitedVal, minBound),
                 set(
                   limitedVal,
                   InstagramPicker.runSpring(
                     springClock,
                     limitedVal,
-                    min, flagWasRunSpring),
+                    minBound,
+                    flagWasRunSpring,
+                  ),
                 ),
               ),
               cond(
-                greaterThan(limitedVal, max),
+                greaterThan(limitedVal, maxBound),
                 set(
                   limitedVal,
                   InstagramPicker.runSpring(
                     springClock,
                     limitedVal,
-                    max,
+                    maxBound,
                     flagWasRunSpring,
                   )),
               ),
@@ -277,41 +277,17 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
             [
               set(limitedVal, add(limitedVal, sub(val, prev))),
               cond(
-                and(lessThan(limitedVal, min), lessThan(val, prev)),
-                // derivate of sqrt
+                and(lessThan(limitedVal, minBound), lessThan(val, prev)),
                 [
-                  // revert
-                  set(limitedVal, add(limitedVal, sub(prev, val))),
-                  // and use derivative of sqrt(x)
-                  set(
-                    limitedVal,
-                    sub(
-                      limitedVal,
-                      multiply(
-                        (divide(1, multiply(2, sqrt(sub(min, sub(limitedVal, sub(prev, val))))))),
-                        (sub(prev, val)),
-                      ),
-                    ),
-                  ),
+                  // revert a bit
+                  set(limitedVal, add(limitedVal, divide(sub(prev, val), 1.2)),),
                 ],
               ),
               cond(
-                and(greaterThan(limitedVal, max), greaterThan(val, prev)),
-                // derivate of sqrt
+                and(greaterThan(limitedVal, maxBound), greaterThan(val, prev)),
                 [
-                  // revert
-                  set(limitedVal, add(limitedVal, sub(prev, val))),
-                  // and use derivative of sqrt(x)
-                  set(
-                    limitedVal,
-                    add(
-                      limitedVal,
-                      multiply(
-                        (divide(1, multiply(2, sqrt(sub(add(limitedVal, sub(val, prev)), max))))),
-                        (sub(val, prev)),
-                      ),
-                    ),
-                  ),
+                  // revert a bit
+                  set(limitedVal, add(limitedVal, divide(sub(prev, val), 1.2))),
                 ],
               ),
               set(prev, val),
@@ -332,7 +308,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       velocity: new Value(0),
       position: new Value(0),
       time: new Value(0),
-    }
+    };
 
     const wasJustStarted = new Value(0);
 
@@ -344,7 +320,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       restSpeedThreshold: 0.001,
       restDisplacementThreshold: 0.001,
       toValue: new Value(0),
-    }
+    };
     return [
       set(wasJustStarted, 0),
       cond(or(clockRunning(clock), wasStartedFromBegin), 0, [
@@ -360,7 +336,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
         stopClock(clock),
       ]),
       state.position,
-    ]
+    ];
   }
 
   private static runDecay(
@@ -488,17 +464,25 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   }
 
   private static withPreservingMultiplicativeOffset
-  (val: Animated.Value<number>, state: Animated.Value<number>)
+  (val: Animated.Value<number>,
+   state: Animated.Value<number>,
+   min: Animated.Adaptable<number>,
+   max: Animated.Adaptable<number>,
+   )
     : Animated.Adaptable<number> {
     if (Platform.OS === 'android') {
-      return this.withPreservingMultiplicativeOffsetAndroid(val, state);
+      return this.withPreservingMultiplicativeOffsetAndroid(val, state, min, max);
     }
     const offset = new Animated.Value(1);
     const valWithPreservedOffset = new Animated.Value(1);
     return block([
       cond(
         eq(state, State.BEGAN),
-        set(offset, valWithPreservedOffset),
+        [
+          cond(greaterThan(valWithPreservedOffset, max), set(valWithPreservedOffset, max)),
+          cond(lessThan(valWithPreservedOffset, min), set(valWithPreservedOffset, min)),
+          set(offset, valWithPreservedOffset),
+        ],
       ),
       set(valWithPreservedOffset, multiply(offset, val)),
       valWithPreservedOffset,
@@ -506,7 +490,11 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
   }
 
   private static withPreservingMultiplicativeOffsetAndroid
-  (val: Animated.Value<number>, state: Animated.Value<number>)
+  (val: Animated.Value<number>,
+   state: Animated.Value<number>,
+   min: Animated.Adaptable<number>,
+   max: Animated.Adaptable<number>,
+  )
     : Animated.Adaptable<number> {
     const offset = new Animated.Value(1);
     const init = new Animated.Value(0);
@@ -515,6 +503,8 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
       cond(
         eq(state, State.BEGAN),
         [
+          cond(greaterThan(valWithPreservedOffset, max), set(valWithPreservedOffset, max)),
+          cond(lessThan(valWithPreservedOffset, min), set(valWithPreservedOffset, min)),
           set(offset, valWithPreservedOffset),
           set(init, 0),
         ],
@@ -584,9 +574,7 @@ class InstagramPicker extends React.Component<PickerProps, PickerState> {
                   transform: [
                     { scale: this.scale },
                     { translateX: this.transX },
-                    { translateY: block([
-                        // call([this.distanceFromTop, this.distanceFromLeft, this.photoHeight, this.photoWidth], console.warn),
-                      this.transY]) },
+                    { translateY: this.transY },
                   ],
                 }}
                 resizeMode='contain'
@@ -617,7 +605,6 @@ export default class App extends React.Component<{}, AppState> {
     };
   }
   render() {
-    console.warn(this.state.ratio);
     return (
       <View style={styles.container}>
         <InstagramPicker
