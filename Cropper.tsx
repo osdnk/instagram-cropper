@@ -11,7 +11,9 @@ import Animated, { Easing } from 'react-native-reanimated';
 const {
   set,
   cond,
-  block, eq,
+  block,
+  eq,
+  call,
   not,
   min,
   add,
@@ -91,9 +93,22 @@ class Grid extends React.Component<{ opacity: Animated.Adaptable<number> }> {
 type PickerProps = {
   source: ImageURISource,
   ratio: number,
+  onPhotoResize?: (size: number[]) => any,
+  zoomEnabled?: boolean,
+  panEnabled?: boolean,
+  gridVisible?: boolean,
+  minZoom: number,
+  maxZoom : number,
 };
 
 class InstagramCropper extends React.Component<PickerProps> {
+  static defaultProps = {
+    zoomEnabled: true,
+    panEnabled: true,
+    minZoom: 1,
+    maxZoom : 3,
+    gridVisible: true,
+  }
   private readonly transX: Animated.Adaptable<number>;
   private readonly transY: Animated.Adaptable<number>;
   private readonly ratio: Animated.Value<number>;
@@ -215,9 +230,9 @@ class InstagramCropper extends React.Component<PickerProps> {
 
     this.scale = InstagramCropper.withBouncyLimits(
       InstagramCropper.withPreservingMultiplicativeOffset(
-        this.scaleMovement, this.pinchState, 1, 3),
-      1,
-      3,
+        this.scaleMovement, this.pinchState, this.props.minZoom, this.props.maxZoom),
+      this.props.minZoom,
+      this.props.maxZoom,
       this.pinchState,
     );
     const isUnderSizedX = lessOrEq(this.scale, divide(this.componentWidth, this.photoWidth));
@@ -623,7 +638,22 @@ class InstagramCropper extends React.Component<PickerProps> {
   render() {
     return (
       <View style={{ width: 350, height: 350, overflow: 'hidden', backgroundColor: '#BBB' }}>
+        {this.props.onPhotoResize &&
+          <Animated.Code
+            exec={
+              call(
+                [
+                  this.scale,
+                  this.transX,
+                  this.transY,
+                ],
+                this.props.onPhotoResize,
+              )
+            }
+          />
+        }
         <PinchGestureHandler
+          enabled={this.props.zoomEnabled}
           shouldCancelWhenOutside={false}
           ref={this.pinch}
           simultaneousHandlers={[this.pan, this.tap]}
@@ -632,6 +662,7 @@ class InstagramCropper extends React.Component<PickerProps> {
         >
           <Animated.View>
             <PanGestureHandler
+              enabled={this.props.panEnabled}
               ref={this.pan}
               simultaneousHandlers={[this.pinch, this.tap]}
               onGestureEvent={this.handlePan}
@@ -639,6 +670,7 @@ class InstagramCropper extends React.Component<PickerProps> {
             >
               <Animated.View>
                 <TapGestureHandler
+                  enabled={this.props.gridVisible}
                   maxDurationMs={10000000}
                   ref={this.tap}
                   simultaneousHandlers={[this.pinch, this.pan]}
