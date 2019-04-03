@@ -1,20 +1,22 @@
 import React, { RefObject } from 'react';
-import { StyleSheet, Text, View, Image, ImageURISource, Platform, TouchableOpacity } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  ImageURISource,
+  Platform,
+  TouchableOpacity
+} from 'react-native';
 import { PanGestureHandler, PinchGestureHandler, State } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 const {
   set,
   cond,
-  onChange,
   block, eq,
-  greaterOrEq,
   not,
-  defined,
-  max,
-  sqrt,
   min,
   add,
-  call,
   and,
   Value,
   spring,
@@ -24,7 +26,6 @@ const {
   greaterThan,
   sub,
   event,
-  diff,
   multiply,
   clockRunning,
   startClock,
@@ -33,18 +34,6 @@ const {
   Clock,
   lessThan,
 } = Animated;
-
-/*interface ImageURISource {
-  uri?: string;
-  bundle?: string;
-  method?: string;
-  headers?: { [key: string]: string };
-  cache?: 'default' | 'reload' | 'force-cache' | 'only-if-cached';
-  body?: string;
-  width?: number;
-  height?: number;
-  scale?: number;
-}*/
 
 type PickerProps = {
   source: ImageURISource,
@@ -72,6 +61,8 @@ class InstagramPicker extends React.Component<PickerProps> {
   private readonly photoHeight: any;
   private readonly distanceFromLeft: any;
   private readonly distanceFromTop: any;
+  private readonly velocityX: any;
+  private readonly velocityY: any;
   constructor(props: PickerProps) {
     super(props);
     this.dragX = new Value(0);
@@ -87,13 +78,13 @@ class InstagramPicker extends React.Component<PickerProps> {
     this.distanceFromTop = new Value(0);
     this.componentWidth = new Value(100);
     this.componentHeight = new Value(100);
-    const velocityX = new Animated.Value(0);
-    const velocityY = new Animated.Value(0);
+    this.velocityX = new Animated.Value(0);
+    this.velocityY = new Animated.Value(0);
     this.handlePan = event([
       {
         nativeEvent: {
-          velocityY,
-          velocityX,
+          velocityY: this.velocityY,
+          velocityX: this.velocityX,
           translationX: this.dragX,
           translationY: this.dragY,
           state: this.panState,
@@ -119,10 +110,6 @@ class InstagramPicker extends React.Component<PickerProps> {
           },
         },
     ) => {
-        /*this.photoHeight.setValue(Math.min(height, width / this.props.ratio));
-        this.photoWidth.setValue(Math.min(width, height * this.props.ratio));
-        this.distanceFromLeft.setValue((width - Math.min(width, height * this.props.ratio)) / 2);
-        this.distanceFromTop.setValue((height - Math.min(height, width / this.props.ratio)) / 2);*/
         this.componentHeight.setValue(height);
         this.componentWidth.setValue(width);
       };
@@ -203,7 +190,7 @@ class InstagramPicker extends React.Component<PickerProps> {
             this.photoWidth,
           ),
           this.panState,
-          velocityX,
+          this.velocityX,
           wasDecayRun,
           this.scale,
         ),
@@ -222,7 +209,7 @@ class InstagramPicker extends React.Component<PickerProps> {
             this.photoHeight,
           ),
           this.panState,
-          velocityY,
+          this.velocityY,
           wasDecayRun,
           this.scale,
         ),
@@ -231,12 +218,6 @@ class InstagramPicker extends React.Component<PickerProps> {
         this.panState,
         this.pinchState,
       );
-  }
-
-  componentDidUpdate(prevProps: PickerProps) {
-    if (prevProps.ratio !== this.props.ratio) {
-      this.ratio.setValue(this.props.ratio);
-    }
   }
 
   private static withBouncyLimits(
@@ -532,36 +513,6 @@ class InstagramPicker extends React.Component<PickerProps> {
     ]);
   }
 
-  private static withLimits(
-    val: Animated.Adaptable<number>,
-    min: Animated.Adaptable<number>,
-    max: Animated.Adaptable<number>,
-    state: Animated.Value<number>) {
-    const offset = new Animated.Value(0);
-    const offsetedVal = add(offset, val);
-    return block([
-      cond(
-        eq(state, State.BEGAN),
-        [
-          cond(
-            lessThan(offsetedVal, min),
-            set(offset, sub(min, val))),
-          cond(
-            greaterThan(offsetedVal, max),
-            set(offset, sub(max, val))),
-        ]),
-      cond(
-        lessThan(offsetedVal, min),
-        min,
-        cond(
-          greaterThan(offsetedVal, max),
-          max,
-          offsetedVal,
-        ),
-      ),
-    ]);
-  }
-
   pinch : RefObject<PinchGestureHandler> = React.createRef();
   pan : RefObject<PanGestureHandler> = React.createRef();
   render() {
@@ -604,9 +555,31 @@ class InstagramPicker extends React.Component<PickerProps> {
   }
 }
 
+// Sorry!! FIXME
+type WrapperState = {
+  val: number,
+};
+class InstagramPickerWrapper extends React.Component<PickerProps, WrapperState> {
+  state = {
+    val: 0,
+  };
+  static getDerivedStateFromProps(props: PickerProps, state: WrapperState) {
+    return {
+      val: state.val + 1,
+    };
+  }
+  render() {
+    return(
+      <InstagramPicker
+        {...this.props}
+        key={this.state.val}
+      />
+    );
+  }
+}
 type AppState = {
   ratio: number,
-  photo: ImageURISource,
+  photo: number,
 };
 
 export default class App extends React.Component<{}, AppState> {
@@ -616,7 +589,7 @@ export default class App extends React.Component<{}, AppState> {
     this.photos = [
       require('./assets/kuce.jpg'),
       require('./assets/spanko.jpg'),
-    ]
+    ];
     const photo = this.photos[0];
     const { width, height } = Image.resolveAssetSource(photo);
     this.state = {
@@ -636,7 +609,7 @@ export default class App extends React.Component<{}, AppState> {
   render() {
     return (
       <View style={styles.container}>
-        <InstagramPicker
+        <InstagramPickerWrapper
           ratio={this.state.ratio}
           source={this.photos[this.state.photo]}
         />
