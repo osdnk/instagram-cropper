@@ -134,12 +134,17 @@ class InstagramCropper extends React.Component<PickerProps> {
   private readonly distanceFromTop: any;
   private readonly velocityX: any;
   private readonly velocityY: any;
+  private readonly wasDecayRun: any;
   private readonly gridClock: Animated.Clock;
+  private readonly decayXClock: Animated.Clock;
+  private readonly decayYClock: Animated.Clock;
 
   constructor(props: PickerProps) {
     super(props);
     this.dragX = new Value(0);
     this.dragY = new Value(0);
+    this.decayXClock = new Clock();
+    this.decayYClock = new Clock();
     this.focalX = new Value(0);
     this.focalY = new Value(0);
     this.panState = new Value(0);
@@ -262,7 +267,7 @@ class InstagramCropper extends React.Component<PickerProps> {
       divide(sub(this.photoHeight, divide(this.componentHeight, this.scale)), 2),
     );
 
-    const wasDecayRun = new Animated.Value(0);
+    this.wasDecayRun = new Animated.Value(0);
 
     this.transX =
       InstagramCropper.withBouncyLimits(
@@ -275,8 +280,9 @@ class InstagramCropper extends React.Component<PickerProps> {
           ),
           this.panState,
           this.velocityX,
-          wasDecayRun,
+          this.wasDecayRun,
           this.scale,
+          this.decayXClock,
         ),
         lowX,
         upX,
@@ -294,8 +300,9 @@ class InstagramCropper extends React.Component<PickerProps> {
           ),
           this.panState,
           this.velocityY,
-          wasDecayRun,
+          this.wasDecayRun,
           this.scale,
+          this.decayYClock,
         ),
         lowY,
         upY,
@@ -485,8 +492,8 @@ class InstagramCropper extends React.Component<PickerProps> {
         set(wasJustStarted, 1),
       ]),
       cond(clockRunning(clock), decay(clock, state, config)),
+      cond(and(clockRunning(clock), not(wasJustStarted)), set(wasStartedFromBegin, 1)),
       cond(state.finished, [
-        cond(and(clockRunning(clock), not(wasJustStarted)), set(wasStartedFromBegin, 1)),
         stopClock(clock),
       ]),
       state.position,
@@ -499,11 +506,11 @@ class InstagramCropper extends React.Component<PickerProps> {
     velocity: Animated.Value<number>,
     wasStartedFromBegin: Animated.Value<number>,
     scale: Animated.Adaptable<number>,
+    decayClock: Animated.Clock,
   ): Animated.Adaptable<number> {
     const valDecayed = new Value(0);
     const offset = new Value(0);
     const prevState = new Value(0);
-    const decayClock = new Clock();
     return block([
       cond(
         eq(state, State.END),
@@ -702,10 +709,14 @@ class InstagramCropper extends React.Component<PickerProps> {
                             1,
                             cond(
                               or(eq(this.tapState, State.BEGAN), eq(this.tapState, State.ACTIVE)),
-                              set(
-                                this.opacity,
-                                InstagramCropper.runTiming(this.gridClock, this.opacity, 1),
-                              ),
+                              [
+                                stopClock(this.decayYClock),
+                                stopClock(this.decayXClock),
+                                set(
+                                  this.opacity,
+                                  InstagramCropper.runTiming(this.gridClock, this.opacity, 1),
+                                ),
+                              ],
                               set(
                                 this.opacity,
                                 InstagramCropper.runTiming(this.gridClock, this.opacity, 0),
