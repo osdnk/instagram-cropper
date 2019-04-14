@@ -352,7 +352,7 @@ class InstagramCropper extends React.Component<PickerProps> {
                       flagWasRunSpring,
                     )),
                   [
-                    set(limitedVal, add(limitedVal, sub(val, prev))),
+                    cond(not(flagWasRunSpring), set(limitedVal, add(limitedVal, sub(val, prev)))),
                     set(prev, val),
                   ],
                 ),
