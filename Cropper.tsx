@@ -341,17 +341,21 @@ class InstagramCropper extends React.Component<PickerProps> {
                     flagWasRunSpring,
                   ),
                 ),
-              ),
-              cond(
-                greaterThan(limitedVal, maxBound),
-                set(
-                  limitedVal,
-                  InstagramCropper.runSpring(
-                    springClock,
+                cond(
+                  greaterThan(limitedVal, maxBound),
+                  set(
                     limitedVal,
-                    maxBound,
-                    flagWasRunSpring,
-                  )),
+                    InstagramCropper.runSpring(
+                      springClock,
+                      limitedVal,
+                      maxBound,
+                      flagWasRunSpring,
+                    )),
+                  [
+                    set(limitedVal, add(limitedVal, sub(val, prev))),
+                    set(prev, val),
+                  ],
+                ),
               ),
             ],
             [
@@ -542,7 +546,7 @@ class InstagramCropper extends React.Component<PickerProps> {
               add(
                 valWithPreservedOffset,
                 Platform.select({
-                  ios: sub(drag, prev),
+                  ios: divide(sub(drag, prev), scale), // TODO wtf
                   android: divide(sub(drag, prev), scale),
                 }),
               )),
